@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode Scanner</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body style="background-color: #f5f5f5; text-align: center; font-family: sans-serif; padding-top: 50px;">
+  <h3 style="color: #333;">📷 กำลังเปิดกล้องสแกน...</h3>
+  <script>
+    async function main() {
+      await liff.init({ liffId: "2010509922-vDeep9SS" });
+      if (liff.isLoggedIn()) {
+         try {
+           if (liff.scanCodeV2) {
+             const result = await liff.scanCodeV2();
+             if (result && result.value) {
+               await liff.sendMessages([{ type: "text", text: String(result.value) }]);
+               liff.closeWindow(); 
+             } else {
+               liff.closeWindow(); 
+             }
+           }
+         } catch (error) {
+           alert("เกิดข้อผิดพลาด: " + error);
+           liff.closeWindow();
+         }
+      } else {
+        liff.login();
+      }
+    }
+    main();
+  </script>
+</body>
+</html>
