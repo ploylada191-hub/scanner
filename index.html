@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pro Barcode Scanner</title>
+  <title>Pro Barcode Scanner v2</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
@@ -14,47 +14,58 @@
   </style>
 </head>
 <body>
-  <h3>📷 สแกนบาร์โค้ดยา</h3>
+  <h3>📷 สแกนบาร์โค้ดยา (เวอร์ชันเร่งความเร็ว)</h3>
   <div id="reader"></div>
   <p id="status">กำลังเตรียมกล้อง...</p>
 
   <script>
     async function main() {
-      // 1. ตรวจสอบการล็อกอิน LIFF
       await liff.init({ liffId: "2010509922-vDeep9SS" });
       if (!liff.isLoggedIn()) {
         liff.login();
         return;
       }
 
-      document.getElementById('status').innerText = "กำลังค้นหาบาร์โค้ด... (พยายามหลบแสงสะท้อน)";
+      document.getElementById('status').innerText = "กำลังสแกน... พยายามให้อยู่ในกรอบและเลี่ยงแสงสะท้อน";
 
-      // 2. ตั้งค่าเครื่องสแกนบาร์โค้ด
       const html5QrCode = new Html5Qrcode("reader");
       
-      // สร้างกรอบสี่เหลี่ยมผืนผ้า (กว้าง 250 สูง 100) ให้พอดีกับบาร์โค้ดแท่ง
-      const config = { fps: 15, qrbox: { width: 250, height: 100 } }; 
+      // 🚀 1. บังคับให้ระบบถอดรหัสเฉพาะบาร์โค้ดสินค้า (EAN-13, EAN-8, Code 128) ไม่เสียเวลาไปสแกนโค้ดรูปแบบอื่น
+      const formatsToSupport = [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_128
+      ];
 
-      // 3. เริ่มเปิดกล้องหลัง
-      html5QrCode.start({ facingMode: "environment" }, config, async (decodedText) => {
-          // เมื่อสแกนสำเร็จ
-          html5QrCode.stop(); // ปิดกล้อง
+      const config = { 
+        fps: 25, // ปรับเพิ่มเฟรมเรตจาก 15 เป็น 25 เพื่อให้กล้องจับภาพได้ถี่และต่อเนื่องขึ้น
+        qrbox: { width: 280, height: 120 }, // ปรับขนาดกล่องเล็งให้ยาวพอดีกับบาร์โค้ดแท่งยา
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true // 🔥 เปิดระบบใช้ชิปฮาร์ดแวร์ภายในเครื่องช่วยอ่านรหัส จะสแกนไวขึ้นมาก
+        }
+      }; 
+
+      // เริ่มทำงานกล้องโดยกำหนดค่ารูปแบบเฉพาะ
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        { ...config, formatsToSupport: formatsToSupport }, 
+        async (decodedText) => {
+          html5QrCode.stop(); // สแกนติดปุ๊บสั่งปิดกล้องทันที
           document.getElementById('status').innerText = "สแกนสำเร็จ! กำลังส่งข้อมูล...";
           document.getElementById('status').style.color = "green";
           
-          // ส่งตัวเลขที่สแกนได้เข้าแชท LINE
           await liff.sendMessages([{ type: "text", text: decodedText }]);
-          liff.closeWindow(); // ปิดหน้าต่างกลับไปหน้าแชท
+          liff.closeWindow(); 
           
-      }, (errorMessage) => {
-          // กรณีกล้องกำลังพยายามโฟกัส (ไม่ต้องทำอะไร)
-      }).catch((err) => {
-          document.getElementById('status').innerText = "โปรดอนุญาตให้ LINE เข้าถึงกล้องของคุณ";
+        }, (errorMessage) => {
+          // กำลังค้นหาต่อเนื่อง
+        }
+      ).catch((err) => {
+          document.getElementById('status').innerText = "โปรดอนุญาตให้เข้าถึงกล้อง";
           document.getElementById('status').style.color = "red";
       });
     }
     
-    // เรียกใช้งานฟังก์ชัน
     main();
   </script>
 </body>
