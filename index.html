@@ -2,59 +2,59 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Fast Number Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pro Barcode Scanner</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    body { margin: 0; background: #000; text-align: center; }
-    #video { width: 100%; height: 60vh; object-fit: cover; }
-    /* กรอบนำสายตา */
-    .overlay { position: absolute; top: 10vh; left: 10%; width: 80%; height: 40vh; border: 3px solid #00ff00; pointer-events: none; }
-    #result { color: #fff; padding: 20px; font-size: 20px; }
+    body { background-color: #f5f5f5; text-align: center; font-family: sans-serif; padding: 20px; margin: 0; }
+    h3 { color: #333; }
+    #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    #status { margin-top: 15px; color: #666; font-size: 14px; }
   </style>
 </head>
 <body>
-  <video id="video" autoplay playsinline></video>
-  <div class="overlay"></div>
-  <div id="result">เล็งเลขไว้ในกรอบสีเขียว</div>
-  <button style="padding: 15px 40px; font-size: 18px;" onclick="fastScan()">อ่านเลขทันที</button>
+  <h3>📷 สแกนบาร์โค้ดยา</h3>
+  <div id="reader"></div>
+  <p id="status">กำลังเตรียมกล้อง...</p>
 
   <script>
     async function main() {
+      // 1. ตรวจสอบการล็อกอิน LIFF
       await liff.init({ liffId: "2010509922-vDeep9SS" });
-      const video = document.getElementById('video');
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      video.srcObject = stream;
-    }
-
-    async function fastScan() {
-      const video = document.getElementById('video');
-      const canvas = document.createElement('canvas');
-      // กำหนดขนาดให้โฟกัสเฉพาะตรงกลางที่กรอบเขียวอยู่
-      canvas.width = 400; 
-      canvas.height = 150;
-      canvas.getContext('2d').drawImage(video, video.videoWidth*0.2, video.videoHeight*0.3, video.videoWidth*0.6, video.videoHeight*0.2, 0, 0, 400, 150);
-      
-      document.getElementById('result').innerText = "กำลังประมวลผล...";
-      
-      // ใช้ worker โหมดเร็ว
-      const worker = Tesseract.createWorker({ logger: m => console.log(m) });
-      await worker.load();
-      await worker.loadLanguage('eng');
-      await worker.initialize('eng');
-      
-      const { data: { text } } = await worker.recognize(canvas);
-      let numbers = text.replace(/[^0-9]/g, '');
-      
-      document.getElementById('result').innerText = "พบเลข: " + numbers;
-      if (numbers.length >= 6) {
-          liff.sendMessages([{ type: "text", text: numbers }]);
-          liff.closeWindow();
-      } else {
-          document.getElementById('result').innerText = "ไม่ชัด ลองใหม่ครับ";
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
       }
-      await worker.terminate();
+
+      document.getElementById('status').innerText = "กำลังค้นหาบาร์โค้ด... (พยายามหลบแสงสะท้อน)";
+
+      // 2. ตั้งค่าเครื่องสแกนบาร์โค้ด
+      const html5QrCode = new Html5Qrcode("reader");
+      
+      // สร้างกรอบสี่เหลี่ยมผืนผ้า (กว้าง 250 สูง 100) ให้พอดีกับบาร์โค้ดแท่ง
+      const config = { fps: 15, qrbox: { width: 250, height: 100 } }; 
+
+      // 3. เริ่มเปิดกล้องหลัง
+      html5QrCode.start({ facingMode: "environment" }, config, async (decodedText) => {
+          // เมื่อสแกนสำเร็จ
+          html5QrCode.stop(); // ปิดกล้อง
+          document.getElementById('status').innerText = "สแกนสำเร็จ! กำลังส่งข้อมูล...";
+          document.getElementById('status').style.color = "green";
+          
+          // ส่งตัวเลขที่สแกนได้เข้าแชท LINE
+          await liff.sendMessages([{ type: "text", text: decodedText }]);
+          liff.closeWindow(); // ปิดหน้าต่างกลับไปหน้าแชท
+          
+      }, (errorMessage) => {
+          // กรณีกล้องกำลังพยายามโฟกัส (ไม่ต้องทำอะไร)
+      }).catch((err) => {
+          document.getElementById('status').innerText = "โปรดอนุญาตให้ LINE เข้าถึงกล้องของคุณ";
+          document.getElementById('status').style.color = "red";
+      });
     }
+    
+    // เรียกใช้งานฟังก์ชัน
     main();
   </script>
 </body>
