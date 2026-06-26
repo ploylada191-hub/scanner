@@ -3,22 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pro Barcode Scanner v2</title>
+  <title>Accurate Barcode Scanner</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body { background-color: #f5f5f5; text-align: center; font-family: sans-serif; padding: 20px; margin: 0; }
-    h3 { color: #333; }
+    h3 { color: #333; margin-bottom: 5px; }
     #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    #status { margin-top: 15px; color: #666; font-size: 14px; }
+    #status { margin-top: 15px; color: #666; font-size: 15px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h3>📷 สแกนบาร์โค้ดยา (เวอร์ชันเร่งความเร็ว)</h3>
+  <h3>📷 สแกนบาร์โค้ดยา</h3>
   <div id="reader"></div>
   <p id="status">กำลังเตรียมกล้อง...</p>
 
   <script>
+    // ตัวแปรสำหรับใช้ทำระบบดับเบิ้ลเช็ค
+    let lastScannedCode = "";
+    let matchCount = 0;
+
     async function main() {
       await liff.init({ liffId: "2010509922-vDeep9SS" });
       if (!liff.isLoggedIn()) {
@@ -26,11 +30,10 @@
         return;
       }
 
-      document.getElementById('status').innerText = "กำลังสแกน... พยายามให้อยู่ในกรอบและเลี่ยงแสงสะท้อน";
+      document.getElementById('status').innerText = "เล็งบาร์โค้ดให้อยู่ในกรอบ และถือค้างไว้ให้นิ่ง";
 
       const html5QrCode = new Html5Qrcode("reader");
       
-      // 🚀 1. บังคับให้ระบบถอดรหัสเฉพาะบาร์โค้ดสินค้า (EAN-13, EAN-8, Code 128) ไม่เสียเวลาไปสแกนโค้ดรูปแบบอื่น
       const formatsToSupport = [
         Html5QrcodeSupportedFormats.EAN_13,
         Html5QrcodeSupportedFormats.EAN_8,
@@ -38,24 +41,43 @@
       ];
 
       const config = { 
-        fps: 25, // ปรับเพิ่มเฟรมเรตจาก 15 เป็น 25 เพื่อให้กล้องจับภาพได้ถี่และต่อเนื่องขึ้น
-        qrbox: { width: 280, height: 120 }, // ปรับขนาดกล่องเล็งให้ยาวพอดีกับบาร์โค้ดแท่งยา
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true // 🔥 เปิดระบบใช้ชิปฮาร์ดแวร์ภายในเครื่องช่วยอ่านรหัส จะสแกนไวขึ้นมาก
-        }
+        fps: 20, 
+        qrbox: { width: 280, height: 125 },
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
       }; 
 
-      // เริ่มทำงานกล้องโดยกำหนดค่ารูปแบบเฉพาะ
       html5QrCode.start(
         { facingMode: "environment" }, 
         { ...config, formatsToSupport: formatsToSupport }, 
         async (decodedText) => {
-          html5QrCode.stop(); // สแกนติดปุ๊บสั่งปิดกล้องทันที
-          document.getElementById('status').innerText = "สแกนสำเร็จ! กำลังส่งข้อมูล...";
-          document.getElementById('status').style.color = "green";
           
-          await liff.sendMessages([{ type: "text", text: decodedText }]);
-          liff.closeWindow(); 
+          // ลบช่องว่างหัวท้าย
+          let cleanCode = decodedText.trim();
+
+          // 🛑 ด่านที่ 1: ตรวจสอบว่าเป็นตัวเลขล้วนหรือไม่ และความยาวต้องเป็น 8 หรือ 13 หลักเท่านั้น
+          if (!/^\d+$/.test(cleanCode) || (cleanCode.length !== 8 && cleanCode.length !== 13)) {
+            return; // ถ้าไม่ใช่เลขยาที่ถูกต้อง ให้ข้ามไป ไม่ต้องสนใจ
+          }
+
+          // 🛑 ด่านที่ 2: ระบบดับเบิ้ลเช็ค (ต้องอ่านได้เลขเดิมซ้ำกัน 2 ครั้งเพื่อความแม่นยำ)
+          if (cleanCode === lastScannedCode) {
+            matchCount++;
+            if (matchCount >= 2) { 
+              // เมื่อมั่นใจว่าอ่านเลขถูกต้องแน่นอนแล้ว ถึงจะทำงานต่อ
+              html5QrCode.stop(); 
+              document.getElementById('status').innerText = "ตรวจสอบรหัสถูกต้อง! กำลังส่งข้อมูล...";
+              document.getElementById('status').style.color = "green";
+              
+              await liff.sendMessages([{ type: "text", text: cleanCode }]);
+              liff.closeWindow(); 
+            }
+          } else {
+            // ถ้าเลขเปลี่ยนไปจากเดิม ให้เริ่มนับหนึ่งใหม่
+            lastScannedCode = cleanCode;
+            matchCount = 1;
+            document.getElementById('status').innerText = "กำลังวิเคราะห์รหัสยาลักษณะทางกายภาพ...";
+            document.getElementById('status').style.color = "#333";
+          }
           
         }, (errorMessage) => {
           // กำลังค้นหาต่อเนื่อง
