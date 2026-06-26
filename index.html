@@ -3,91 +3,55 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Accurate Barcode Scanner</title>
+  <title>Smart OCR Scanner</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
   <style>
-    body { background-color: #f5f5f5; text-align: center; font-family: sans-serif; padding: 20px; margin: 0; }
-    h3 { color: #333; margin-bottom: 5px; }
-    #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    #status { margin-top: 15px; color: #666; font-size: 15px; font-weight: bold; }
+    body { background-color: #f5f5f5; text-align: center; font-family: sans-serif; padding: 15px; }
+    #video { width: 100%; max-width: 400px; border-radius: 8px; }
+    #result { font-size: 24px; font-weight: bold; color: #007bff; margin: 10px 0; }
+    button { background-color: #007bff; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; font-size: 16px; }
   </style>
 </head>
 <body>
-  <h3>📷 สแกนบาร์โค้ดยา</h3>
-  <div id="reader"></div>
-  <p id="status">กำลังเตรียมกล้อง...</p>
+  <h3>📷 สแกนตัวเลขใต้บาร์โค้ด</h3>
+  <video id="video" autoplay playsinline></video>
+  <div id="result">เล็งตัวเลขให้ชัด...</div>
+  <button onclick="capture()">📸 อ่านเลขจากภาพ</button>
+  <p id="status" style="font-size: 12px; color: #666;">กดปุ่มเพื่ออ่านเลข (รอ AI ประมวลผล 2-3 วินาที)</p>
 
   <script>
-    // ตัวแปรสำหรับใช้ทำระบบดับเบิ้ลเช็ค
-    let lastScannedCode = "";
-    let matchCount = 0;
-
     async function main() {
       await liff.init({ liffId: "2010509922-vDeep9SS" });
-      if (!liff.isLoggedIn()) {
-        liff.login();
-        return;
-      }
-
-      document.getElementById('status').innerText = "เล็งบาร์โค้ดให้อยู่ในกรอบ และถือค้างไว้ให้นิ่ง";
-
-      const html5QrCode = new Html5Qrcode("reader");
-      
-      const formatsToSupport = [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.CODE_128
-      ];
-
-      const config = { 
-        fps: 20, 
-        qrbox: { width: 280, height: 125 },
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-      }; 
-
-      html5QrCode.start(
-        { facingMode: "environment" }, 
-        { ...config, formatsToSupport: formatsToSupport }, 
-        async (decodedText) => {
-          
-          // ลบช่องว่างหัวท้าย
-          let cleanCode = decodedText.trim();
-
-          // 🛑 ด่านที่ 1: ตรวจสอบว่าเป็นตัวเลขล้วนหรือไม่ และความยาวต้องเป็น 8 หรือ 13 หลักเท่านั้น
-          if (!/^\d+$/.test(cleanCode) || (cleanCode.length !== 8 && cleanCode.length !== 13)) {
-            return; // ถ้าไม่ใช่เลขยาที่ถูกต้อง ให้ข้ามไป ไม่ต้องสนใจ
-          }
-
-          // 🛑 ด่านที่ 2: ระบบดับเบิ้ลเช็ค (ต้องอ่านได้เลขเดิมซ้ำกัน 2 ครั้งเพื่อความแม่นยำ)
-          if (cleanCode === lastScannedCode) {
-            matchCount++;
-            if (matchCount >= 2) { 
-              // เมื่อมั่นใจว่าอ่านเลขถูกต้องแน่นอนแล้ว ถึงจะทำงานต่อ
-              html5QrCode.stop(); 
-              document.getElementById('status').innerText = "ตรวจสอบรหัสถูกต้อง! กำลังส่งข้อมูล...";
-              document.getElementById('status').style.color = "green";
-              
-              await liff.sendMessages([{ type: "text", text: cleanCode }]);
-              liff.closeWindow(); 
-            }
-          } else {
-            // ถ้าเลขเปลี่ยนไปจากเดิม ให้เริ่มนับหนึ่งใหม่
-            lastScannedCode = cleanCode;
-            matchCount = 1;
-            document.getElementById('status').innerText = "กำลังวิเคราะห์รหัสยาลักษณะทางกายภาพ...";
-            document.getElementById('status').style.color = "#333";
-          }
-          
-        }, (errorMessage) => {
-          // กำลังค้นหาต่อเนื่อง
-        }
-      ).catch((err) => {
-          document.getElementById('status').innerText = "โปรดอนุญาตให้เข้าถึงกล้อง";
-          document.getElementById('status').style.color = "red";
-      });
+      const video = document.getElementById('video');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
     }
-    
+
+    async function capture() {
+      const video = document.getElementById('video');
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      
+      document.getElementById('status').innerText = "AI กำลังอ่านตัวเลข...";
+      
+      // ใช้ Tesseract อ่านตัวเลขจากภาพที่ถ่ายได้
+      Tesseract.recognize(canvas, 'eng', { logger: m => console.log(m) })
+        .then(({ data: { text } }) => {
+          // ดึงเฉพาะตัวเลขที่พบในภาพ
+          let numbers = text.replace(/[^0-9]/g, '');
+          document.getElementById('result').innerText = numbers || "ไม่พบตัวเลข";
+          
+          if (numbers.length >= 5) {
+            if(confirm("พบเลข: " + numbers + " ส่งเข้าแชทเลยไหม?")) {
+              liff.sendMessages([{ type: "text", text: numbers }]);
+              liff.closeWindow();
+            }
+          }
+        });
+    }
     main();
   </script>
 </body>
