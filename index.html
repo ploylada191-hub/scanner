@@ -2,23 +2,22 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart OCR Scanner</title>
+  <title>Fast Number Scanner</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
   <style>
-    body { background-color: #f5f5f5; text-align: center; font-family: sans-serif; padding: 15px; }
-    #video { width: 100%; max-width: 400px; border-radius: 8px; }
-    #result { font-size: 24px; font-weight: bold; color: #007bff; margin: 10px 0; }
-    button { background-color: #007bff; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; font-size: 16px; }
+    body { margin: 0; background: #000; text-align: center; }
+    #video { width: 100%; height: 60vh; object-fit: cover; }
+    /* กรอบนำสายตา */
+    .overlay { position: absolute; top: 10vh; left: 10%; width: 80%; height: 40vh; border: 3px solid #00ff00; pointer-events: none; }
+    #result { color: #fff; padding: 20px; font-size: 20px; }
   </style>
 </head>
 <body>
-  <h3>📷 สแกนตัวเลขใต้บาร์โค้ด</h3>
   <video id="video" autoplay playsinline></video>
-  <div id="result">เล็งตัวเลขให้ชัด...</div>
-  <button onclick="capture()">📸 อ่านเลขจากภาพ</button>
-  <p id="status" style="font-size: 12px; color: #666;">กดปุ่มเพื่ออ่านเลข (รอ AI ประมวลผล 2-3 วินาที)</p>
+  <div class="overlay"></div>
+  <div id="result">เล็งเลขไว้ในกรอบสีเขียว</div>
+  <button style="padding: 15px 40px; font-size: 18px;" onclick="fastScan()">อ่านเลขทันที</button>
 
   <script>
     async function main() {
@@ -28,29 +27,33 @@
       video.srcObject = stream;
     }
 
-    async function capture() {
+    async function fastScan() {
       const video = document.getElementById('video');
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
+      // กำหนดขนาดให้โฟกัสเฉพาะตรงกลางที่กรอบเขียวอยู่
+      canvas.width = 400; 
+      canvas.height = 150;
+      canvas.getContext('2d').drawImage(video, video.videoWidth*0.2, video.videoHeight*0.3, video.videoWidth*0.6, video.videoHeight*0.2, 0, 0, 400, 150);
       
-      document.getElementById('status').innerText = "AI กำลังอ่านตัวเลข...";
+      document.getElementById('result').innerText = "กำลังประมวลผล...";
       
-      // ใช้ Tesseract อ่านตัวเลขจากภาพที่ถ่ายได้
-      Tesseract.recognize(canvas, 'eng', { logger: m => console.log(m) })
-        .then(({ data: { text } }) => {
-          // ดึงเฉพาะตัวเลขที่พบในภาพ
-          let numbers = text.replace(/[^0-9]/g, '');
-          document.getElementById('result').innerText = numbers || "ไม่พบตัวเลข";
-          
-          if (numbers.length >= 5) {
-            if(confirm("พบเลข: " + numbers + " ส่งเข้าแชทเลยไหม?")) {
-              liff.sendMessages([{ type: "text", text: numbers }]);
-              liff.closeWindow();
-            }
-          }
-        });
+      // ใช้ worker โหมดเร็ว
+      const worker = Tesseract.createWorker({ logger: m => console.log(m) });
+      await worker.load();
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
+      
+      const { data: { text } } = await worker.recognize(canvas);
+      let numbers = text.replace(/[^0-9]/g, '');
+      
+      document.getElementById('result').innerText = "พบเลข: " + numbers;
+      if (numbers.length >= 6) {
+          liff.sendMessages([{ type: "text", text: numbers }]);
+          liff.closeWindow();
+      } else {
+          document.getElementById('result').innerText = "ไม่ชัด ลองใหม่ครับ";
+      }
+      await worker.terminate();
     }
     main();
   </script>
