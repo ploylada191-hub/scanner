@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Pro Barcode Scanner (Recheck)</title>
+  
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  
+  <style>
+    /* ใส่ CSS ดีไซน์เต็มจอแบบรูปที่ 2 ของคุณได้เลยครับ */
+    body { font-family: 'Sarabun', sans-serif; margin: 0; text-align: center; background-color: #f4f6f9; }
+    #reader { width: 100%; height: 80vh; background: black; }
+    #status { padding: 15px; font-weight: bold; font-size: 1.1em; }
+  </style>
+</head>
+<body>
+
+  <div id="status">📸 กำลังเปิดกล้องสแกน...</div>
+  <div id="reader"></div>
+
+  <script>
+    // 1. เริ่มต้นระบบ LINE LIFF
+    // ** อย่าลืมเปลี่ยนตรง 'YOUR_LIFF_ID' ให้เป็น ID ของคุณที่ได้จาก LINE Developers **
+    liff.init({ liffId: "2010509922-nASTP1y3" }).then(() => {
+        if (!liff.isLoggedIn()) {
+            liff.login();
+        } else {
+            startCamera(); // ถ้าล็อกอินแล้ว ให้เปิดกล้อง
+        }
+    }).catch((err) => { console.error("LIFF Init error", err); });
+
+    function startCamera() {
+      const html5QrCode = new Html5Qrcode("reader");
+      
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 15, qrbox: { width: 280, height: 160 } }, // ปรับขนาดกรอบให้เหมาะกับบาร์โค้ดยา
+        (decodedText, decodedResult) => {
+          
+          // เมื่อสแกนบาร์โค้ดสำเร็จ
+          html5QrCode.stop().then(() => {
+            document.getElementById("status").innerText = "สแกนสำเร็จ กำลังส่งข้อมูล...";
+            
+            // 2. ส่งคำว่า [Recheck] ตามด้วยรหัสยา กลับเข้าไปในแชท LINE
+            liff.sendMessages([
+              {
+                type: 'text',
+                text: "[Recheck] " + decodedText
+              }
+            ]).then(() => {
+              // 3. ส่งข้อความสำเร็จ ให้ปิดหน้าต่างกล้องสแกนทันที
+              liff.closeWindow();
+            }).catch((err) => {
+              document.getElementById("status").innerText = "เกิดข้อผิดพลาดในการส่งข้อความ";
+            });
+
+          });
+        },
+        (errorMessage) => { /* ซ่อน error ระหว่างค้นหา */ }
+      ).catch((err) => {
+        document.getElementById("status").innerText = "ไม่สามารถเข้าถึงกล้องได้";
+      });
+    }
+  </script>
+</body>
+</html>
