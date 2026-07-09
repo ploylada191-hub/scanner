@@ -36,7 +36,7 @@
       
       html5QrCode.start(
         { facingMode: "environment" },
-        { fps: 15, qrbox: { width: 280, height: 160 } }, // ปรับขนาดกรอบให้เหมาะกับบาร์โค้ดยา
+        { fps: 15, qrbox: 250 }, // เปลี่ยนเป็นกรอบจัตุรัส 250x250 รองรับทั้ง QR และ Barcode
         (decodedText, decodedResult) => {
           
           // เมื่อสแกนบาร์โค้ดสำเร็จ
